@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Rapido Safety Desk</title>
+<style>
+  :root { --bg:#0f1115; --card:#181b22; --line:#2a2f3a; --text:#e8eaf0; --mute:#8b93a7; --y:#f9c933; --red:#ff4d4f; --amb:#ffa940; --green:#52c41a; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui, sans-serif; }
+  header { display:flex; align-items:center; gap:12px; padding:14px 20px; border-bottom:1px solid var(--line); }
+  header .logo { background:var(--y); color:#000; font-weight:800; padding:4px 10px; border-radius:6px; }
+  header .stats { margin-left:auto; display:flex; gap:18px; color:var(--mute); }
+  header .stats b { color:var(--text); }
+  main { padding:16px 20px; display:grid; gap:14px; grid-template-columns:repeat(auto-fill, minmax(420px, 1fr)); }
+  .empty { color:var(--mute); padding:40px; text-align:center; grid-column:1/-1; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; }
+  .card.OPEN { border-color:var(--red); box-shadow:0 0 0 1px var(--red), 0 0 24px #ff4d4f33; }
+  .row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .tag { font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px; background:#2a2f3a; }
+  .tag.P0 { background:var(--red); } .tag.OPEN { background:var(--red); } .tag.ACKNOWLEDGED { background:var(--amb); color:#000; }
+  .tag.RESOLVED { background:var(--green); color:#000; } .tag.CANCELLED { background:#555; }
+  .tag.TEAM_LEAD { background:#d4380d; } .tag.CITY_HEAD { background:#a8071a; }
+  .timer { margin-left:auto; font:700 20px ui-monospace, monospace; }
+  .timer.breach { color:var(--red); animation:blink 1s infinite; }
+  @keyframes blink { 50% { opacity:.4; } }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:10px 0; }
+  .box { background:#11141a; border-radius:8px; padding:8px 10px; }
+  .box .k { color:var(--mute); font-size:11px; text-transform:uppercase; letter-spacing:.04em; }
+  .tl { max-height:180px; overflow:auto; border-top:1px solid var(--line); margin-top:8px; padding-top:8px; font-size:12px; }
+  .tl div { padding:2px 0; } .tl .t { color:var(--mute); font-family:ui-monospace,monospace; margin-right:6px; }
+  .tl .escalation { color:var(--red); font-weight:600; }
+  button { border:0; border-radius:8px; padding:8px 12px; font-weight:700; cursor:pointer; }
+  .ack { background:var(--y); color:#000; } .res { background:var(--green); color:#000; } .note { background:#2a2f3a; color:var(--text); }
+  a { color:var(--y); }
+</style>
+</head>
+<body>
+<header>
+  <span class="logo">rapido</span><strong>Safety Desk · P0 Queue</strong>
+  <div class="stats"><span>Open <b id="sOpen">0</b></span><span>Escalated <b id="sEsc">0</b></span><span>Avg ack <b id="sAck">–</b></span></div>
+</header>
+<main id="list"><div class="empty">No incidents. Trigger SOS from the rider app.</div></main>
+<script>
+const AGENT = 'Raj (Safety Desk)';
+const fmt = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; };
+const time = (t) => new Date(t).toLocaleTimeString();
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+let lastSig = '';
+let audioCtx;
+
+function beep() {
+  try { audioCtx ||= new AudioContext(); const o = audioCtx.createOscillator(); o.frequency.value = 880; o.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime + 0.25); } catch {}
+}
+
+async function act(id, action, body = {}) {
+  await fetch(`/api/incidents/${id}/${action}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ agent: AGENT, ...body }) });
+  load();
+}
+
+function card(i) {
+  const a = i.ambulance;
+  const ackMs = i.ackAt ? i.ackAt - i.createdAt : i.ageMs;
+  const breach = !i.ackAt && i.status === 'OPEN' && i.ageMs > i.slaMs;
+  const amb = a.status === 'DISPATCHED' ? `${esc(a.partner)} · ${esc(a.vehicle)}<br>ETA <b>${a.eta} min</b> → ${esc(a.hospital)}`
+    : a.status === 'ARRIVED' ? `<b style="color:var(--green)">Arrived</b> · ${esc(a.partner)}`
+    : a.status === 'REQUESTING' ? `Requesting… (attempt ${a.attempts.length})` : esc(a.status);
+  return `<div class="card ${i.status}">
+    <div class="row">
+      <span class="tag P0">P0</span><span class="tag ${i.status}">${i.status}</span>
+      ${i.escalation !== 'SAFETY_DESK' ? `<span class="tag ${i.escalation}">↑ ${i.escalation.replace('_', ' ')}</span>` : ''}
+      <strong>${i.id}</strong>
+      <span class="timer ${breach ? 'breach' : ''}" title="Time to human acknowledgement">${fmt(ackMs)}</span>
+    </div>
+    <div class="grid">
+      <div class="box"><div class="k">Rider</div>${esc(i.rider.name)}<br>${esc(i.rider.phone)}</div>
+      <div class="box"><div class="k">Captain · ${esc(i.captainState?.status || '')}</div>${esc(i.captain.name)}<br>${esc(i.captain.vehicle)}</div>
+      <div class="box"><div class="k">Trigger</div>${i.trigger === 'manual' ? 'SOS button' : 'Auto crash detection'}<br>${time(i.createdAt)}</div>
+      <div class="box"><div class="k">Location</div><a target="_blank" href="https://maps.google.com/?q=${i.location.lat},${i.location.lng}">${i.location.lat.toFixed(5)}, ${i.location.lng.toFixed(5)}</a></div>
+      <div class="box" style="grid-column:1/-1"><div class="k">Ambulance</div>${amb}</div>
+    </div>
+    <div class="row">
+      ${i.status === 'OPEN' ? `<button class="ack" onclick="act('${i.id}','ack')">Acknowledge & call rider</button>` : ''}
+      ${['OPEN', 'ACKNOWLEDGED', 'CANCELLED'].includes(i.status) ? `<button class="note" onclick="const t=prompt('Note');t&&act('${i.id}','note',{text:t})">Add note</button>` : ''}
+      ${i.status !== 'RESOLVED' ? `<button class="res" onclick="act('${i.id}','resolve')">Resolve</button>` : ''}
+    </div>
+    <div class="tl">${i.timeline.slice().reverse().map((e) => `<div class="${e.actor}"><span class="t">${time(e.t)}</span><b>${esc(e.actor)}:</b> ${esc(e.text)}</div>`).join('')}</div>
+  </div>`;
+}
+
+async function load() {
+  const list = await fetch('/api/incidents').then((r) => r.json()).catch(() => null);
+  if (!list) return;
+  const open = list.filter((i) => i.status === 'OPEN');
+  const acked = list.filter((i) => i.ackAt);
+  document.getElementById('sOpen').textContent = open.length;
+  document.getElementById('sEsc').textContent = list.filter((i) => i.escalation !== 'SAFETY_DESK').length;
+  document.getElementById('sAck').textContent = acked.length ? fmt(acked.reduce((s, i) => s + i.ackAt - i.createdAt, 0) / acked.length) : '–';
+  const sig = open.map((i) => i.id).join();
+  if (open.length && sig !== lastSig) beep();
+  lastSig = sig;
+  document.getElementById('list').innerHTML = list.length ? list.map(card).join('') : '<div class="empty">No incidents. Trigger SOS from the rider app.</div>';
+}
+load();
+setInterval(load, 1000);
+</script>
+</body>
+</html>
