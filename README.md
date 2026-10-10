@@ -6,25 +6,14 @@ Built in response to Dev Boddu's post: an accident at 11:10 PM got its first hum
 
 ## 🎥 Demo video
 
-
 https://github.com/user-attachments/assets/6b188a84-0fdb-4d74-9be0-a7662db6aff3
 
+## 📱 Screenshots
 
-
-
-
-
-<!--
-  To add your video: open this README on GitHub, click the ✏️ edit button,
-  drag-and-drop your .mp4 (≤ 100 MB) right here, and commit.
-  GitHub turns it into an embedded player link like the one below.
--->
-
-https://github.com/user-attachments/assets/REPLACE-WITH-YOUR-VIDEO
-
-| Rider app | Safety Desk |
-|---|---|
-| _screenshot_ | _screenshot_ |
+| Live ride | Safety toolkit | Crash detected | Help is on the way |
+|:---:|:---:|:---:|:---:|
+| <img src="docs/screenshots/1-live-ride.jpg" width="200"> | <img src="docs/screenshots/2-safety-toolkit.jpg" width="200"> | <img src="docs/screenshots/3-crash-check.jpg" width="200"> | <img src="docs/screenshots/4-help-on-the-way.jpg" width="200"> |
+| Captain PIN, Safety score, SOS button | SOS, crash detection, contacts, 112 | 30 s "Are you okay?" check | Contacts alerted, desk connecting, ambulance ETA |
 
 ## Structure
 
